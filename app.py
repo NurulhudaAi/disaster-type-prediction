@@ -15,42 +15,78 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for styling
+# Modern Custom CSS styling
 st.markdown("""
 <style>
-    .main-header {
-        font-size: 2.1rem;
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    
+    .app-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid #E5E7EB;
+        margin-bottom: 1.25rem;
+    }
+    
+    .app-title {
+        font-size: 1.85rem;
         font-weight: 700;
-        color: #1E3A8A;
-        margin-bottom: 0.2rem;
+        color: #0F172A;
+        letter-spacing: -0.025em;
+        margin: 0;
     }
-    .sub-header {
-        font-size: 1.05rem;
-        color: #4B5563;
-        margin-bottom: 1.2rem;
+    
+    .app-subtitle {
+        font-size: 0.95rem;
+        color: #64748B;
+        margin-top: 0.25rem;
     }
-    .metric-card {
-        background-color: #F8FAFC;
-        border-radius: 8px;
-        padding: 12px 16px;
-        border-left: 4px solid #3B82F6;
-        margin-bottom: 10px;
-    }
-    .badge-correct {
-        background-color: #DCFCE7;
-        color: #15803D;
-        padding: 4px 10px;
+    
+    .badge-accuracy {
+        background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+        color: white;
+        padding: 6px 14px;
         border-radius: 9999px;
         font-weight: 600;
         font-size: 0.85rem;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
-    .badge-wrong {
-        background-color: #FEE2E2;
-        color: #B91C1C;
+    
+    .comparison-card {
+        background: #F8FAFC;
+        border: 1px solid #E2E8F0;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 14px;
+    }
+    
+    .tag-correct {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background-color: #DEF7EC;
+        color: #03543F;
         padding: 4px 10px;
-        border-radius: 9999px;
+        border-radius: 6px;
         font-weight: 600;
-        font-size: 0.85rem;
+        font-size: 0.8rem;
+    }
+    
+    .tag-incorrect {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background-color: #FDE8E8;
+        color: #9B1C1C;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.8rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -65,12 +101,12 @@ def load_backend():
 
 predictor, benchmark, explainer, agent = load_backend()
 
-# Initialize session state
+# Initialize session states
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "👋 สวัสดีครับ! ผมคือ **Disaster Model Auditor Agent**\n\nระบบนี้ถูกออกแบบมาเพื่อ **ทดสอบและท้าทายความแม่นยำของโมเดล Machine Learning (Random Forest)** กับข้อมูลเหตุการณ์จริงในประวัติศาสตร์ (Ground Truth) พร้อมแจกแจงเหตุผลการตัดสินใจด้วย **SHAP (Explainable AI)**\n\n👉 สามารถกดปุ่มลัดด้านซ้าย หรือพิมพ์สั่ง เช่น *'สุ่มเคสมาทดสอบ 1 เคส'*, *'ขอลองเคสแผ่นดินไหว'*, หรือ *'ทดสอบเคสยากที่โมเดลทายผิด'* ได้เลยครับ"
+            "content": "👋 Welcome! I am the **Disaster Model Auditor Agent**.\n\nMy primary objective is to **rigorously challenge and evaluate** the pre-trained Multi-class Random Forest model against verified **Ground Truth** events from the EM-DAT database, powered by **SHAP Explainable AI**.\n\nUse the sidebar controls to test random cases, challenge hard misclassified events, or converse naturally to inspect model predictions."
         }
     ]
 
@@ -84,52 +120,45 @@ if "stats" not in st.session_state:
 if "last_eval" not in st.session_state:
     st.session_state.last_eval = None
 
-# Sidebar
+# Top App Header
+st.markdown("""
+<div class="app-header">
+    <div>
+        <div class="app-title">🌪️ Disaster Model Auditor & Explainable AI</div>
+        <div class="app-subtitle">Interactive Ground Truth Evaluation & SHAP Attribution for Multi-Class Disaster Classification</div>
+    </div>
+    <div>
+        <span class="badge-accuracy">Test Accuracy: 91.70% (F1: 0.8518)</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# Sidebar Configuration
 with st.sidebar:
-    st.title("⚙️ แผงควบคุมการทดสอบ")
+    st.markdown("### :material/tune: Audit Controls")
     
-    # 1. API Key Setup
-    st.markdown("### 🔑 Claude API Connection")
-    env_api_key = os.getenv("ANTHROPIC_API_KEY", "")
-    api_key_input = st.text_input(
-        "Anthropic API Key (ของอาจารย์):",
-        value=env_api_key,
-        type="password",
-        help="หากยังไม่มี API Key ระบบจะใช้ Local Auditor Engine ประมวลผลและคำนวณ SHAP ได้อย่างสมบูรณ์แบบโดยไม่ต้องต่อเน็ต"
-    )
-    if api_key_input:
-        agent.set_api_key(api_key_input)
-        st.success("🟢 เชื่อมต่อ Claude API เรียบร้อย", icon="✅")
-    else:
-        st.info("⚪ ใช้งานในโหมด Local Auditor Engine (พร้อมใช้งานโดยไม่ต้องใช้เน็ต)", icon="ℹ️")
+    with st.container(border=True):
+        st.markdown("**Session Scoreboard**")
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            st.metric("Total Tested", st.session_state.stats["tested"])
+            st.metric("Correct", st.session_state.stats["correct"])
+        with col_s2:
+            acc_val = (
+                (st.session_state.stats["correct"] / st.session_state.stats["tested"] * 100)
+                if st.session_state.stats["tested"] > 0
+                else 0.0
+            )
+            st.metric("Session Acc.", f"{acc_val:.1f}%")
+            st.metric("Incorrect", st.session_state.stats["incorrect"])
+            
+        if st.button("Reset Session Stats", icon=":material/restart_alt:", width="stretch"):
+            st.session_state.stats = {"tested": 0, "correct": 0, "incorrect": 0}
+            st.rerun()
 
-    st.divider()
-
-    # 2. Scoreboard
-    st.markdown("### 🏆 Session Audit Scoreboard")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.metric("ทดสอบแล้ว", f"{st.session_state.stats['tested']} เคส")
-        st.metric("ทายถูก 🎯", f"{st.session_state.stats['correct']} เคส")
-    with c2:
-        acc_pct = (
-            (st.session_state.stats["correct"] / st.session_state.stats["tested"] * 100)
-            if st.session_state.stats["tested"] > 0
-            else 0.0
-        )
-        st.metric("ความแม่นยำเซสชัน", f"{acc_pct:.1f}%")
-        st.metric("ทายผิด ❌", f"{st.session_state.stats['incorrect']} เคส")
-
-    if st.button("🔄 รีเซ็ตสถิติเซสชัน", use_container_width=True):
-        st.session_state.stats = {"tested": 0, "correct": 0, "incorrect": 0}
-        st.rerun()
-
-    st.divider()
-
-    # 3. Quick Actions
-    st.markdown("### 🎯 ปุ่มลัดทดสอบสำหรับกรรมการ")
+    st.markdown("### :material/play_circle: Quick Test Bench")
     
-    if st.button("🎲 สุ่มเคสทดสอบ (Random Case)", use_container_width=True, type="primary"):
+    if st.button("Random Ground Truth Case", icon=":material/casino:", type="primary", width="stretch"):
         case = benchmark.get_random_case()
         eval_res = agent.run_ground_truth_challenge(case)
         st.session_state.last_eval = eval_res
@@ -139,18 +168,17 @@ with st.sidebar:
         else:
             st.session_state.stats["incorrect"] += 1
             
-        # Add to chat
         st.session_state.messages.append({
             "role": "user",
-            "content": f"สุ่มทดสอบเคส `{case['case_id']}` ({case['ground_truth_class']})"
+            "content": f"Challenge model with random case `{case['case_id']}` ({case['ground_truth_class']})"
         })
         st.session_state.messages.append({
             "role": "assistant",
-            "content": f"ผลการทดสอบเคส `{case['case_id']}` จาก Ground Truth Bank เรียบร้อยแล้ว (ดูการวิเคราะห์ด้านล่าง)"
+            "content": f"Evaluated case `{case['case_id']}` against Ground Truth. Inspection results updated in the right panel."
         })
         st.rerun()
 
-    if st.button("⚠️ ทดสอบเคสยาก (Hard Case ที่โมเดลท้าทาย)", use_container_width=True):
+    if st.button("Challenge Hard Case (Error Analysis)", icon=":material/warning:", width="stretch"):
         case = benchmark.get_random_case(only_incorrect=True)
         eval_res = agent.run_ground_truth_challenge(case)
         st.session_state.last_eval = eval_res
@@ -159,20 +187,20 @@ with st.sidebar:
         
         st.session_state.messages.append({
             "role": "user",
-            "content": f"ขอดูเคสยาก/จุดอ่อนของโมเดล `{case['case_id']}`"
+            "content": f"Examine known misclassified case `{case['case_id']}`"
         })
         st.session_state.messages.append({
             "role": "assistant",
-            "content": f"ดึงเคสยาก `{case['case_id']}` ซึ่งโมเดลเคยสับสนมาทดสอบและวิเคราะห์ SHAP เรียบร้อยครับ"
+            "content": f"Loaded difficult case `{case['case_id']}` (Ground Truth: {case['ground_truth_class']}, Model: {eval_res['prediction']['predicted_class']}). SHAP attributions are displayed for error diagnosis."
         })
         st.rerun()
 
-    selected_disaster = st.selectbox(
-        "เจาะจงประเภทภัยพิบัติ:",
-        ["All"] + predictor.class_names
+    selected_category = st.selectbox(
+        "Target disaster category:",
+        ["All Categories"] + predictor.class_names
     )
-    if st.button(f"🔎 ทดสอบเคส {selected_disaster}", use_container_width=True):
-        target = None if selected_disaster == "All" else selected_disaster
+    if st.button("Evaluate Selected Category", icon=":material/filter_alt:", width="stretch"):
+        target = None if selected_category == "All Categories" else selected_category
         case = benchmark.get_random_case(disaster_type=target)
         if case:
             eval_res = agent.run_ground_truth_challenge(case)
@@ -185,122 +213,126 @@ with st.sidebar:
                 
             st.session_state.messages.append({
                 "role": "user",
-                "content": f"ทดสอบเคสประเภท {selected_disaster} (`{case['case_id']}`)"
+                "content": f"Evaluate test case for category: **{selected_category}** (`{case['case_id']}`)"
             })
             st.session_state.messages.append({
                 "role": "assistant",
-                "content": f"ผลการทดสอบเคส `{case['case_id']}` (Ground Truth: {case['ground_truth_class']})"
+                "content": f"Case `{case['case_id']}` evaluated. Ground Truth: **{case['ground_truth_class']}**."
             })
             st.rerun()
 
+    with st.expander(":material/key: LLM & Claude API Settings", expanded=False):
+        api_input = st.text_input(
+            "Anthropic API Key:",
+            type="password",
+            placeholder="sk-ant-api03-...",
+            help="Provide your Anthropic API Key to activate live Claude 3.5 Sonnet Tool Calling. If empty, the fast Local Auditor Engine runs seamlessly."
+        )
+        if api_input:
+            agent.set_api_key(api_input)
+            st.success("Claude 3.5 Sonnet Connected", icon=":material/check_circle:")
+        else:
+            st.info("Local Auditor Engine Active (Offline Mode)", icon=":material/info:")
+
     st.divider()
     summary = benchmark.get_summary_stats()
-    st.caption(f"📁 คลังข้อสอบ: {summary['total_cases']:,} เคส | Benchmark Accuracy: 91.70%")
+    st.caption(f":material/database: Test Bank: {summary['total_cases']:,} events | 8 Classes")
 
-# Main Area
-st.markdown("<div class='main-header'>🌪️ Disaster Model Auditor & Explainable AI</div>", unsafe_allow_html=True)
-st.markdown("<div class='sub-header'>ระบบผู้ช่วยตรวจสอบความแม่นยำของ Random Forest Pipeline ด้วย Ground Truth และ SHAP</div>", unsafe_allow_html=True)
-
-# Layout: Split into Chat Column and Analysis Panel Column
-col_chat, col_viz = st.columns([1.1, 0.9])
+# Main Layout
+col_chat, col_inspect = st.columns([1.1, 0.9], gap="large")
 
 with col_chat:
-    st.subheader("💬 สนทนา & ตรวจสอบข้อสอบ")
+    st.markdown("##### :material/chat: Auditor Dialogue & Verification")
     
-    # Display message history
-    chat_container = st.container(height=520)
+    chat_container = st.container(height=540, border=True)
     with chat_container:
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
                 
-    # Chat Input
-    user_prompt = st.chat_input("พิมพ์คำถาม หรือสั่งให้ทดสอบเคส...")
-    if user_prompt:
-        # Add user message
-        st.session_state.messages.append({"role": "user", "content": user_prompt})
+    user_input = st.chat_input("Ask a disaster question or request a model test (e.g., 'Test an earthquake case')...")
+    if user_input:
+        st.session_state.messages.append({"role": "user", "content": user_input})
         
-        # Run agent
-        with st.spinner("Agent กำลังตรวจสอบและคำนวณผล..."):
-            history_tuples = [
+        with st.spinner("Auditor processing query and computing SHAP..."):
+            history_data = [
                 {"role": m["role"], "content": m["content"]}
                 for m in st.session_state.messages[:-1]
                 if m["role"] in ["user", "assistant"]
             ]
-            res = agent.chat(user_prompt, history=history_tuples)
+            response_obj = agent.chat(user_input, history=history_data)
             
-            if res.get("eval_data"):
-                st.session_state.last_eval = res["eval_data"]
+            if response_obj.get("eval_data"):
+                st.session_state.last_eval = response_obj["eval_data"]
                 st.session_state.stats["tested"] += 1
-                if res["eval_data"]["is_correct"]:
+                if response_obj["eval_data"]["is_correct"]:
                     st.session_state.stats["correct"] += 1
                 else:
                     st.session_state.stats["incorrect"] += 1
 
-            st.session_state.messages.append({"role": "assistant", "content": res["response"]})
+            st.session_state.messages.append({"role": "assistant", "content": response_obj["response"]})
             st.rerun()
 
-with col_viz:
-    st.subheader("📊 ผลการตรวจสอบและอธิบายโมเดล (XAI)")
+with col_inspect:
+    st.markdown("##### :material/analytics: Explainable AI & Audit Inspector")
     
-    if st.session_state.last_eval is None:
-        st.info("👈 กดปุ่ม **'สุ่มเคสทดสอบ'** หรือพิมพ์คุยกับ Agent เพื่อดูผลการตรวจสอบและค่า SHAP ที่นี่", icon="💡")
-    else:
-        last = st.session_state.last_eval
-        case = last["case"]
-        pred = last["prediction"]
-        shap_data = last["shap"]
-        is_correct = last["is_correct"]
-        
-        # Result Header Card
-        status_badge = "<span class='badge-correct'>🎯 ทายถูกต้อง (CORRECT)</span>" if is_correct else "<span class='badge-wrong'>❌ ทายผิดพลาด (INCORRECT)</span>"
-        
-        st.markdown(f"""
-        <div class="metric-card">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size:1.1rem; font-weight:700;">เคส: <code>{case['case_id']}</code></span>
-                {status_badge}
+    with st.container(border=True):
+        if st.session_state.last_eval is None:
+            st.info("Trigger a test from the sidebar or via chat to view live Ground Truth verification and SHAP attributions here.", icon=":material/lightbulb:")
+        else:
+            eval_data = st.session_state.last_eval
+            case = eval_data["case"]
+            pred = eval_data["prediction"]
+            shap_info = eval_data["shap"]
+            is_correct = eval_data["is_correct"]
+            
+            # Comparison Header Card
+            status_html = (
+                '<span class="tag-correct">✓ CORRECT PREDICTION</span>'
+                if is_correct
+                else '<span class="tag-incorrect">✗ MISCLASSIFIED (HARD CASE)</span>'
+            )
+            
+            st.markdown(f"""
+            <div class="comparison-card">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:700; font-size:1.05rem;">Case Reference: <code>{case['case_id']}</code></span>
+                    {status_html}
+                </div>
+                <div style="margin-top:10px; font-size:0.92rem; line-height:1.6;">
+                    <b>Ground Truth (Actual):</b> <span style="color:#2563EB; font-weight:700;">{case['ground_truth_class']}</span><br>
+                    <b>Model Prediction:</b> <span style="font-weight:700;">{pred['predicted_class']}</span> (Confidence: {pred['confidence']*100:.2f}%)<br>
+                    <span style="color:#64748B; font-size:0.85rem;">📍 {case['summary']['country']} ({case['summary']['region']}) | Month {case['summary']['start_month']} | Scale: {case['summary']['magnitude_scale']}</span>
+                </div>
             </div>
-            <div style="margin-top:8px; font-size:0.95rem;">
-                <b>เฉลยจริง (Ground Truth):</b> <span style="color:#1D4ED8; font-weight:600;">{case['ground_truth_class']}</span><br>
-                <b>โมเดลทำนาย (Prediction):</b> <span style="font-weight:600;">{pred['predicted_class']}</span> (ความมั่นใจ {pred['confidence']*100:.2f}%)<br>
-                <span style="color:#6B7280; font-size:0.85rem;">📍 {case['summary']['country']} ({case['summary']['region']}) | เดือน: {case['summary']['start_month']} | หน่วย: {case['summary']['magnitude_scale']}</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # 1. Prediction Probabilities Bar Chart
-        st.markdown("##### 📈 ความน่าจะเป็นของแต่ละคลาส (Class Probabilities)")
-        prob_df = pd.DataFrame(
-            list(pred["probabilities"].items()),
-            columns=["Disaster Type", "Probability"]
-        )
-        st.bar_chart(
-            prob_df.set_index("Disaster Type"),
-            horizontal=True,
-            color="#3B82F6",
-            height=260
-        )
-        
-        # 2. SHAP Feature Attribution
-        st.markdown("##### 🔬 อิทธิพลของตัวแปร (SHAP Attributions)")
-        shap_items = shap_data["top_all_features"]
-        shap_df = pd.DataFrame([
-            {
-                "Feature": item["feature"],
-                "SHAP Impact": item["shap_value"],
-                "Impact Direction": "ส่งเสริม (+)" if item["shap_value"] > 0 else "คัดค้าน (-)"
-            }
-            for item in shap_items
-        ])
-        
-        st.dataframe(
-            shap_df,
-            hide_index=True,
-            use_container_width=True
-        )
-        
-        # 3. Plain English / Thai Explanation
-        st.markdown("##### 💡 คำอธิบายเชิงเหตุผล (Explainable Insights)")
-        for expl in shap_data["human_explanations"][:3]:
-            st.markdown(f"- {expl}")
+            """, unsafe_allow_html=True)
+            
+            # Probability Distribution Chart
+            st.markdown("**Class Probability Distribution**")
+            prob_df = pd.DataFrame(
+                list(pred["probabilities"].items()),
+                columns=["Category", "Probability"]
+            )
+            st.bar_chart(
+                prob_df.set_index("Category"),
+                horizontal=True,
+                color="#2563EB",
+                height=240
+            )
+            
+            # SHAP Feature Attributions
+            st.markdown("**Top Driving Features (SHAP Values)**")
+            shap_display = pd.DataFrame([
+                {
+                    "Feature": item["feature"],
+                    "SHAP Value": f"{item['shap_value']:+.4f}",
+                    "Influence": "Supports Decision (+)" if item["shap_value"] > 0 else "Opposes Decision (-)"
+                }
+                for item in shap_info["top_all_features"]
+            ])
+            st.dataframe(shap_display, hide_index=True, width="stretch")
+            
+            # Explainable AI Insights
+            st.markdown("**Domain-Level Interpretation**")
+            for explanation in shap_info["human_explanations"][:3]:
+                st.markdown(f"- {explanation}")

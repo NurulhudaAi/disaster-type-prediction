@@ -67,7 +67,7 @@ class DisasterExplainer:
         top_positive = [c for c in sorted_contributions if c["impact"] == "positive"][:top_k]
         top_negative = [c for c in sorted_contributions if c["impact"] == "negative"][:top_k]
         
-        # Generate domain-friendly explanation lines
+        # Generate domain-friendly explanation lines in English
         explanation_bullet_points = []
         for item in top_positive:
             feat = item["feature"]
@@ -75,19 +75,19 @@ class DisasterExplainer:
             impact = item["shap_value"]
             if feat.startswith("magnitude_scale_") and val == 1:
                 scale_name = feat.replace("magnitude_scale_", "")
-                explanation_bullet_points.append(f"หน่วยวัดขนาดเหตุการณ์ ({scale_name}) เป็นหลักฐานสำคัญที่ชี้ว่าเป็น {target_class_name} (SHAP +{impact:.4f})")
+                explanation_bullet_points.append(f"Magnitude scale unit ({scale_name}) strongly indicates {target_class_name} (SHAP +{impact:.4f})")
             elif feat.startswith("region_") and val == 1:
                 reg_name = feat.replace("region_", "")
-                explanation_bullet_points.append(f"ตำแหน่งภูมิภาค {reg_name} สอดคล้องกับพื้นที่เสี่ยง {target_class_name} (SHAP +{impact:.4f})")
+                explanation_bullet_points.append(f"Geographic region ({reg_name}) aligns with typical {target_class_name} hotspots (SHAP +{impact:.4f})")
             elif feat == "start_month":
-                explanation_bullet_points.append(f"เกิดในเดือนที่ {int(val)} ซึ่งเป็นฤดูกาลที่พบบ่อยของ {target_class_name} (SHAP +{impact:.4f})")
+                explanation_bullet_points.append(f"Event occurred in month {int(val)}, matching the seasonal pattern of {target_class_name} (SHAP +{impact:.4f})")
             elif "duration" in feat:
-                explanation_bullet_points.append(f"ระยะเวลาการเกิดเหตุการณ์สอดคล้องกับพฤติกรรมของ {target_class_name} (SHAP +{impact:.4f})")
+                explanation_bullet_points.append(f"Recorded event duration strongly aligns with {target_class_name} dynamics (SHAP +{impact:.4f})")
             elif feat.startswith("country_") and val == 1:
                 country_name = feat.replace("country_", "")
-                explanation_bullet_points.append(f"ประวัติศาสตร์ภัยพิบัติในประเทศ {country_name} ส่งผลบวกต่อการตัดสินใจ (SHAP +{impact:.4f})")
+                explanation_bullet_points.append(f"Historical disaster frequency in {country_name} supports this classification (SHAP +{impact:.4f})")
             else:
-                explanation_bullet_points.append(f"ตัวแปร {feat} (ค่า={val}) ผลักดันให้โมเดลตอบ {target_class_name} (SHAP +{impact:.4f})")
+                explanation_bullet_points.append(f"Feature '{feat}' (value={val}) actively drives the model towards {target_class_name} (SHAP +{impact:.4f})")
                 
         return {
             "target_class": target_class_name,

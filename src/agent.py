@@ -6,34 +6,34 @@ import anthropic
 CLAUDE_TOOLS = [
     {
         "name": "fetch_ground_truth_case",
-        "description": "ดึงเคสจริงจากชุดข้อมูล Test Set (Ground Truth Bank) เพื่อนำมาทดสอบท้าทายโมเดล มีเฉลยจริงกำกับอยู่เสมอ",
+        "description": "Fetch a real historical disaster case from the Ground Truth test bank (EM-DAT database) to evaluate and challenge the machine learning model.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "disaster_type": {
                     "type": "string",
-                    "description": "กรองตามประเภทภัยพิบัติ เช่น Flood, Storm, Earthquake, Wildfire (หรือ 'all')"
+                    "description": "Filter by disaster category: Drought, Earthquake, Epidemic, Extreme Temperature, Flood, Landslide, Storm, Wildfire, or 'all'."
                 },
                 "only_hard_case": {
                     "type": "boolean",
-                    "description": "ถ้าเป็น True จะดึงเฉพาะเคสที่โมเดลเคยทายผิด (Hard Case) เพื่อนำมาวิเคราะห์จุดอ่อน"
+                    "description": "If true, fetch only misclassified/hard cases to perform detailed error analysis and discover model limitations."
                 },
                 "region": {
                     "type": "string",
-                    "description": "ภูมิภาคที่ต้องการทดสอบ เช่น Asia, Americas, Europe, Africa, Oceania"
+                    "description": "Geographic region to filter: Asia, Americas, Europe, Africa, Oceania."
                 }
             }
         }
     },
     {
         "name": "run_model_prediction",
-        "description": "ส่ง Feature เข้าโมเดล Random Forest เพื่อจำแนกประเภทภัยพิบัติ และคำนวณค่าความน่าจะเป็น (Probabilities)",
+        "description": "Feed extracted event features into the pre-trained Random Forest Pipeline to classify the disaster type and compute confidence probabilities across all 8 classes.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "features": {
                     "type": "object",
-                    "description": "Dictionary ของ Features ของเหตุการณ์"
+                    "description": "Dictionary of feature values representing the disaster event (start_month, duration, region, magnitude_scale, etc.)."
                 }
             },
             "required": ["features"]
@@ -41,17 +41,17 @@ CLAUDE_TOOLS = [
     },
     {
         "name": "explain_decision_with_shap",
-        "description": "คำนวณค่า SHAP Values เพื่อวิเคราะห์ว่า Features ใดเป็นปัจจัยสำคัญที่ผลักดันให้โมเดลตอบคลาสนั้น",
+        "description": "Compute SHAP (Shapley Additive exPlanations) values via TreeExplainer to quantify the exact feature attributions driving the model's decision.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "features": {
                     "type": "object",
-                    "description": "Features ของตัวอย่าง"
+                    "description": "Dictionary of event features."
                 },
                 "predicted_class_id": {
                     "type": "integer",
-                    "description": "ID ของคลาสที่โมเดลทำนาย (0-7)"
+                    "description": "Class index (0-7) predicted by the model."
                 }
             },
             "required": ["features"]
@@ -59,17 +59,20 @@ CLAUDE_TOOLS = [
     }
 ]
 
-SYSTEM_PROMPT = """คุณคือ "Disaster Model Auditor Agent" ผู้เชี่ยวชาญด้านการตรวจสอบและประเมินความแม่นยำของโมเดล Machine Learning (Random Forest) สำหรับการจำแนกประเภทภัยพิบัติ
+SYSTEM_PROMPT = """You are the "Disaster Model Auditor Agent", an AI expert specializing strictly in disaster classification, machine learning evaluation, and Explainable AI (XAI).
 
-หน้าที่หลักของคุณ:
-1. ทำหน้าที่เป็นผู้คุมสอบ (Model Auditor): นำเคสประวัติศาสตร์จริง (Ground Truth) มาทดสอบโมเดล
-2. ตรวจสอบว่าโมเดลทำนาย "ถูกต้องจริง หรือ ผิด" โดยเทียบกับ Ground Truth เสมอ
-3. อธิบายเหตุผลเบื้องหลังการตัดสินใจของโมเดลอย่างโปร่งใสผ่านค่า SHAP (Explainable AI):
-   - ถ้าโมเดลทายถูก: ชี้ให้เห็นว่า Features ไหนที่มีน้ำหนักบวกสูงสุดที่ช่วยให้ทายถูก
-   - ถ้าโมเดลทายผิด: วิเคราะห์ว่าทำไมโมเดลถึงสับสน ปัจจัยไหนหลอกโมเดล หรือเกิดจากความทับซ้อนทางกายภาพของภัยพิบัติ เช่น น้ำท่วมกับพายุมรสุม
-4. ใช้ภาษาไทยที่เข้าใจง่าย มีความเป็นมืออาชีพ เหมาะสำหรับใช้ในการนำเสนอโครงงาน Senior Project
+STRICT SCOPE & DOMAIN GUARDRAILS:
+1. You ONLY discuss topics related to natural disasters, EM-DAT historical disaster records, multi-class disaster classification, and the evaluation of the pre-trained Random Forest model.
+2. If the user asks about unrelated topics (such as general programming, casual chitchat, cooking, entertainment, sports, or general advice), politely decline and redirect them back to disaster analysis and model auditing.
+3. You must NEVER fabricate numbers, predictions, or accuracy metrics. Always invoke the provided tools (`fetch_ground_truth_case`, `run_model_prediction`, `explain_decision_with_shap`) to perform tests.
 
-เมื่อผู้ใช้สั่งให้ทดสอบ ให้เรียกใช้ Tool `fetch_ground_truth_case` หรือส่ง Feature เข้า `run_model_prediction` และ `explain_decision_with_shap` เสมอ ห้ามแต่งคำตอบหรือค่าตัวเลขขึ้นมาเองเด็ดขาด"""
+AUDITOR RESPONSIBILITIES:
+- Always compare the Model's Prediction against the real Ground Truth.
+- Clearly state whether the model was CORRECT or INCORRECT.
+- Interpret the SHAP feature attributions in clear domain terms (e.g., explaining why magnitude scale, season, duration, or geography swayed the model).
+- For misclassified cases (Hard Cases), provide constructive error analysis: explain the physical overlap between disaster categories (e.g., why a monsoon-season flood might share characteristics with a storm).
+- Maintain an academic, professional, and rigorous tone suitable for a Senior Project defense.
+- Communicate in clear, concise English."""
 
 class DisasterAuditorAgent:
     def __init__(self, predictor, explainer, benchmark, api_key: Optional[str] = None):
@@ -95,7 +98,7 @@ class DisasterAuditorAgent:
                 region=region
             )
             if not case:
-                return {"error": "ไม่พบเคสทดสอบที่ตรงกับเงื่อนไขที่ระบุ"}
+                return {"error": "No historical test case found matching the specified criteria."}
             return case
             
         elif name == "run_model_prediction":
@@ -158,7 +161,6 @@ class DisasterAuditorAgent:
         
         # 2. Check if Claude wants to use tools
         if response.stop_reason == "tool_use":
-            # Add Claude's response (with tool_use blocks) to messages
             messages.append({"role": "assistant", "content": response.content})
             
             tool_outputs_for_claude = []
@@ -170,7 +172,6 @@ class DisasterAuditorAgent:
                     tool_results.append({"tool": tool_name, "args": tool_args, "result": tool_res})
                     
                     if tool_name == "fetch_ground_truth_case" and "case_id" in tool_res:
-                        # Auto-evaluate with SHAP to pass complete context back
                         last_eval_data = self.run_ground_truth_challenge(tool_res)
                     
                     tool_outputs_for_claude.append({
@@ -208,6 +209,16 @@ class DisasterAuditorAgent:
         """Local auditor when API key is pending."""
         msg = user_message.lower()
         
+        # Guardrail check for obvious out-of-domain queries
+        out_of_domain_keywords = ["recipe", "cook", "bitcoin", "crypto", "dating", "movie", "song", "joke", "game"]
+        if any(w in msg for w in out_of_domain_keywords):
+            return {
+                "response": "I am a specialized Disaster Model Auditor. I can only assist with natural disaster analysis, event classification, and evaluating the pre-trained Machine Learning model. Please ask a disaster-related question or request a model test.",
+                "tool_results": [],
+                "eval_data": None,
+                "mode": "local_guardrail"
+            }
+
         # Check if user asked for a specific disaster type
         target_type = None
         for c in self.predictor.class_names:
@@ -215,7 +226,7 @@ class DisasterAuditorAgent:
                 target_type = c
                 break
                 
-        only_hard = ("ผิด" in msg or "ยาก" in msg or "hard" in msg or "จุดอ่อน" in msg)
+        only_hard = any(w in msg for w in ["hard", "wrong", "error", "misclassified", "weakness", "fail", "challenging"])
         
         # Pull case
         case = self.benchmark.get_random_case(
@@ -228,27 +239,27 @@ class DisasterAuditorAgent:
             
         eval_data = self.run_ground_truth_challenge(case)
         
-        # Build local structured response
-        status_icon = "🎯 **ถูกต้อง (CORRECT)**" if eval_data["is_correct"] else "❌ **ทายผิด (INCORRECT)**"
+        # Build structured English response
+        status_badge = "🎯 **CORRECT PREDICTION**" if eval_data["is_correct"] else "❌ **MISCLASSIFIED (HARD CASE)**"
         gt = case["ground_truth_class"]
         pred = eval_data["prediction"]["predicted_class"]
         conf = eval_data["prediction"]["confidence"] * 100
         
         shap_points = "\n".join([f"- {p}" for p in eval_data["shap"]["human_explanations"][:4]])
         
-        text = f"""### {status_icon} — ผลการตรวจสอบโมเดล (Ground Truth Audit)
+        text = f"""### {status_badge} — Ground Truth Audit Result
 
-* **รหัสเคสทดสอบ:** `{case['case_id']}`
-* **สถานที่/ภูมิภาค:** {case['summary']['country']} ({case['summary']['region']})
-* **เดือนที่เกิดเหตุ:** เดือนที่ {case['summary']['start_month']} | **หน่วยวัดขนาด:** {case['summary']['magnitude_scale']}
-* **เฉลยจริง (Ground Truth):** **{gt}**
-* **โมเดลทำนาย (Model Prediction):** **{pred}** (ความมั่นใจ **{conf:.2f}%**)
+* **Case ID:** `{case['case_id']}`
+* **Location:** {case['summary']['country']} ({case['summary']['region']})
+* **Timing & Scale:** Month {case['summary']['start_month']} | Magnitude Scale: {case['summary']['magnitude_scale']}
+* **Ground Truth (Actual):** **{gt}**
+* **Model Prediction:** **{pred}** (Confidence: **{conf:.2f}%**)
 
 ---
-#### 🔬 การวิเคราะห์อิทธิพลตัวแปรด้วย SHAP (Explainable AI):
+#### 🔬 Explainable AI (SHAP Attributions):
 {shap_points}
 
-*(หมายเหตุ: รันใน Local Model Auditor Mode เนื่องจากยังไม่ได้ระบุ Claude API Key หากใส่อาจารย์/Claude Key ระบบจะเพิ่มการวิเคราะห์เชิงลึกอัตโนมัติ)*
+*(Running in Local Model Auditor mode. Connect your Claude API Key in the sidebar for full conversational reasoning and live agent orchestration).*
 """
         return {
             "response": text,
