@@ -296,6 +296,11 @@ def render_message(msg, idx):
             st.markdown(msg["content"])
 
 
+def sync_model_picker():
+    # Separate widget key + callback: selected_model survives views where the dropdown isn't rendered.
+    st.session_state.selected_model = st.session_state.model_picker
+
+
 def render_composer_toolbar():
     with st.container(horizontal=True, vertical_alignment="center", gap="small"):
         picked = st.menu_button(
@@ -305,11 +310,14 @@ def render_composer_toolbar():
             type="tertiary",
             key="quick_menu",
         )
-        selected_m = st.segmented_control(
+        st.selectbox(
             "Active model",
             options=registry.available_models,
-            default=st.session_state.selected_model,
+            index=registry.available_models.index(st.session_state.selected_model),
+            key="model_picker",
+            on_change=sync_model_picker,
             label_visibility="collapsed",
+            width=180,
         )
         compare = st.toggle("Compare", value=st.session_state.comparison_mode)
 
@@ -324,9 +332,6 @@ def render_composer_toolbar():
         if selected_comps and list(selected_comps) != st.session_state.comparison_models:
             st.session_state.comparison_models = list(selected_comps)
 
-    if selected_m and selected_m != st.session_state.selected_model:
-        st.session_state.selected_model = selected_m
-        st.rerun()
     if compare != st.session_state.comparison_mode:
         st.session_state.comparison_mode = compare
         st.rerun()
