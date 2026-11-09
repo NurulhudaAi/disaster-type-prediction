@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime
 
@@ -45,6 +46,62 @@ st.html("""
         box-shadow: 0 0.25rem 1.25rem rgba(31, 30, 29, 0.07);
     }
 
+    /* Toolbar sits inside the composer's bottom edge, left of the send button */
+    .st-key-composer { gap: 0; }
+    .st-key-composer_tools {
+        margin-top: -2.9rem;
+        padding: 0 3.4rem 0.45rem 0.6rem;
+        position: relative;
+        z-index: 2;
+        pointer-events: none;
+    }
+    .st-key-composer_tools > * { pointer-events: auto; }
+    .st-key-composer_tools [data-testid="stElementContainer"] { margin: 0; }
+
+    /* Model picker reads as plain text, like a chat app's model name */
+    .st-key-model_picker [data-baseweb="select"] > div {
+        background: transparent;
+        border-color: transparent;
+        font-size: 0.875rem;
+    }
+    .st-key-model_picker [data-baseweb="select"] > div:hover { background: rgba(31, 30, 29, 0.05); }
+
+    /* Slash-command menu (driven by the script in the sidebar) */
+    #slash-menu {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        background: #FFFFFF;
+        border: 1px solid #E8E6DC;
+        border-radius: 0.9rem;
+        box-shadow: 0 0.5rem 1.75rem rgba(31, 30, 29, 0.12);
+        padding: 0.35rem;
+        max-height: 18rem;
+        overflow-y: auto;
+        font-family: Inter, sans-serif;
+    }
+    #slash-menu .slash-head {
+        font-size: 0.72rem;
+        color: #8A8780;
+        padding: 0.3rem 0.6rem 0.25rem;
+    }
+    #slash-menu .slash-item {
+        display: flex;
+        gap: 0.75rem;
+        align-items: baseline;
+        padding: 0.45rem 0.6rem;
+        border-radius: 0.55rem;
+        cursor: pointer;
+    }
+    #slash-menu .slash-item.active { background: #F0EEE6; }
+    #slash-menu .slash-cmd {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.85rem;
+        color: #C15F3C;
+        white-space: nowrap;
+    }
+    #slash-menu .slash-desc { font-size: 0.85rem; color: #5E5D59; }
+
     /* Start-screen greeting */
     .greeting {
         font-family: 'Source Serif 4', Georgia, serif;
@@ -68,6 +125,110 @@ def load_registry():
 registry = load_registry()
 
 VIEWS = ["Chat", "Chat + details", "Benchmarks"]
+
+SLASH_COMMANDS = (
+    [
+        {"cmd": "/random", "desc": "Audit a random test case"},
+        {"cmd": "/hard", "desc": "A case at least one model got wrong"},
+        {"cmd": "/compare", "desc": "A disagreement case, all three models"},
+    ]
+    + [
+        {"cmd": f"/category {c}", "desc": f"Audit {'an' if c[0] in 'AEIOU' else 'a'} {c} case"}
+        for c in registry.class_names
+    ]
+    + [{"cmd": "/export", "desc": "Open benchmarks and the session report"}]
+)
+
+# Shows a command menu above the composer while the text starts with "/".
+# st.chat_input has no keystroke events, so this listens on the page (st.html isn't iframed).
+SLASH_MENU_JS = """
+<script>
+(() => {
+  if (window.__slashMenu) return;
+  window.__slashMenu = true;
+  const COMMANDS = __COMMANDS__;
+  const SEL = '[data-testid="stChatInputTextArea"]';
+  const menu = document.createElement('div');
+  menu.id = 'slash-menu';
+  menu.setAttribute('role', 'listbox');
+  document.body.appendChild(menu);
+  let items = [], active = 0, ta = null;
+
+  const open = () => menu.style.display === 'block';
+  const hide = () => { menu.style.display = 'none'; items = []; };
+
+  // React tracks the textarea value itself; use the native setter + input event so it notices.
+  const setValue = (el, v) => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(el, v);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+
+  // Build rows with DOM calls: the HTML sanitizer drops a script tag whose text looks like markup.
+  const el = (tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text) n.textContent = text;
+    return n;
+  };
+  const render = () => {
+    menu.replaceChildren(el('div', 'slash-head', 'Commands'));
+    items.forEach((c, i) => {
+      const row = el('div', 'slash-item' + (i === active ? ' active' : ''));
+      row.setAttribute('role', 'option');
+      row.dataset.idx = String(i);
+      row.append(el('span', 'slash-cmd', c.cmd), el('span', 'slash-desc', c.desc));
+      menu.append(row);
+    });
+    const box = ta.closest('[data-testid="stChatInput"]') || ta;
+    const r = box.getBoundingClientRect();
+    menu.style.left = r.left + 'px';
+    menu.style.width = r.width + 'px';
+    menu.style.bottom = (window.innerHeight - r.top + 8) + 'px';
+    menu.style.display = 'block';
+    const cur = menu.querySelector('.slash-item.active');
+    if (cur) cur.scrollIntoView({ block: 'nearest' });
+  };
+
+  const update = (el) => {
+    const q = el.value.toLowerCase();
+    if (!q.startsWith('/') || q.includes('\\n')) { hide(); return; }
+    items = COMMANDS.filter(c => c.cmd.toLowerCase().startsWith(q.trimEnd()) || c.cmd.toLowerCase().startsWith(q));
+    if (!items.length || (items.length === 1 && items[0].cmd.toLowerCase() === q.trim())) { hide(); return; }
+    ta = el;
+    active = Math.min(active, items.length - 1);
+    render();
+  };
+
+  const pick = (i) => {
+    const c = items[i];
+    if (!c || !ta) return;
+    setValue(ta, c.cmd);
+    hide();
+    ta.focus();
+  };
+
+  document.addEventListener('input', (e) => {
+    if (e.target.matches && e.target.matches(SEL)) { active = 0; update(e.target); }
+  }, true);
+
+  // Capture phase on document runs before React's handlers, so Enter picks instead of sending.
+  document.addEventListener('keydown', (e) => {
+    if (!open() || e.target !== ta) return;
+    if (e.key === 'ArrowDown') { active = (active + 1) % items.length; render(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { active = (active - 1 + items.length) % items.length; render(); e.preventDefault(); }
+    else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopImmediatePropagation(); pick(active); }
+    else if (e.key === 'Escape') { e.preventDefault(); hide(); }
+  }, true);
+
+  menu.addEventListener('mousedown', (e) => {
+    const row = e.target.closest('[data-idx]');
+    if (row) { e.preventDefault(); pick(Number(row.dataset.idx)); }
+  });
+  document.addEventListener('focusout', (e) => { if (e.target === ta) setTimeout(hide, 120); }, true);
+  window.addEventListener('resize', hide);
+})();
+</script>
+""".replace("__COMMANDS__", json.dumps(SLASH_COMMANDS))
 
 
 # -------------------------------------------------------------
@@ -301,25 +462,29 @@ def sync_model_picker():
     st.session_state.selected_model = st.session_state.model_picker
 
 
-def render_composer_toolbar():
-    with st.container(horizontal=True, vertical_alignment="center", gap="small"):
-        picked = st.menu_button(
-            "Quick audit",
-            options=list(QUICK_ACTIONS),
-            icon=":material/add:",
-            type="tertiary",
-            key="quick_menu",
-        )
-        st.selectbox(
-            "Active model",
-            options=registry.available_models,
-            index=registry.available_models.index(st.session_state.selected_model),
-            key="model_picker",
-            on_change=sync_model_picker,
-            label_visibility="collapsed",
-            width=180,
-        )
-        compare = st.toggle("Compare", value=st.session_state.comparison_mode)
+def render_composer(placeholder):
+    """Claude-style composer: text box with + on the bottom left and the model picker bottom right."""
+    with st.container(key="composer"):
+        user_query = st.chat_input(placeholder, submit_mode="disable", height=110)
+        with st.container(key="composer_tools", horizontal=True, vertical_alignment="center", gap="small"):
+            picked = st.menu_button(
+                ":material/add:",
+                options=list(QUICK_ACTIONS),
+                type="tertiary",
+                key="quick_menu",
+                help="Quick audit",
+            )
+            st.space("stretch")
+            compare = st.toggle("Compare", value=st.session_state.comparison_mode)
+            st.selectbox(
+                "Active model",
+                options=registry.available_models,
+                index=registry.available_models.index(st.session_state.selected_model),
+                key="model_picker",
+                on_change=sync_model_picker,
+                label_visibility="collapsed",
+                width=150,
+            )
 
     if st.session_state.comparison_mode:
         selected_comps = st.pills(
@@ -337,6 +502,7 @@ def render_composer_toolbar():
         st.rerun()
     if picked:
         run_quick_action(picked)
+    return user_query
 
 
 def handle_input(user_query):
@@ -367,18 +533,13 @@ def render_chat(composer_placeholder):
             "Which disaster model shall we audit?</p>"
         )
         st.space("medium")
-        user_query = st.chat_input(composer_placeholder, submit_mode="disable")
+        user_query = render_composer(composer_placeholder)
         st.pills(
             "Suggestions",
             options=list(QUICK_ACTIONS),
             label_visibility="collapsed",
             key="quick_pills",
             on_change=queue_quick_action,
-        )
-        render_composer_toolbar()
-        st.caption(
-            "Audits run on 3 models over the held-out EM-DAT test set. "
-            "Type `/` for commands: `/random`, `/hard`, `/compare`, `/category Flood`, `/export`."
         )
         handle_input(user_query)
         return
@@ -390,9 +551,7 @@ def render_chat(composer_placeholder):
         if st.session_state.pending_question:
             answer_pending_question()
 
-    user_query = st.chat_input(composer_placeholder, submit_mode="disable")
-    render_composer_toolbar()
-    st.caption("Model outputs and LLM explanations can be wrong. Check against the SHAP values and ground truth.")
+    user_query = render_composer(composer_placeholder)
     handle_input(user_query)
 
 
@@ -680,3 +839,7 @@ else:  # Benchmarks
         render_case_details()
     with tab_export:
         render_export()
+
+# Last on the page: the slash-command menu script (renders nothing visible).
+# Kept out of the sidebar because a collapsed sidebar doesn't mount its contents.
+st.html(SLASH_MENU_JS, unsafe_allow_javascript=True)
