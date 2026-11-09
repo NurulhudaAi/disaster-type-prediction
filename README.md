@@ -1,24 +1,26 @@
 # Disaster Type Prediction & Interactive Model Auditor (Explainable AI)
 
-A Senior Project that integrates **Multi-class Disaster Event Classification (Random Forest Pipeline)** with an **Agentic Model Auditor** and **Explainable AI (SHAP)**.
+A Senior Project that integrates **Multi-class Disaster Event Classification (Random Forest, LightGBM, and XGBoost pipelines)** with an **Agentic Model Auditor** and **Explainable AI (SHAP)**.
 
 ---
 
 ## 🌟 Key Features
 
 1. **High Performance ML Pipeline**:
-   - Random Forest Classifier with **SMOTETomek** class balancing and hyperparameter tuning.
-   - **91.70% Test Accuracy** and **0.8518 F1-Macro** across 8 disaster categories.
+   - Random Forest, LightGBM, and XGBoost classifiers, each in a **SMOTETomek** class-balancing pipeline.
+   - Random Forest: **91.70% Test Accuracy** and **0.8518 F1-Macro** across 8 disaster categories; the leaderboard tab shows all three models with bootstrap 95% CIs and McNemar significance tests.
 2. **Interactive Ground Truth Model Auditor**:
    - Challenges the pre-trained model with 3,495 real historical events from the EM-DAT test set.
-   - Live side-by-side comparison: **Model Prediction vs. Ground Truth**.
+   - Live side-by-side comparison: **Model Prediction vs. Ground Truth**, or all three models at once in Compare mode.
+   - Model Disagreement Radar surfaces the test cases where the three models predict different classes.
    - Real-time Session Scoreboard tracking accuracy and error patterns.
 3. **Explainable AI (SHAP TreeExplainer)**:
    - Quantifies the impact of physical features (magnitude scale, event duration, timing, geographic region).
    - Explains *why* the model made each decision, both for correct cases and hard misclassified cases.
-4. **Agentic Claude Integration**:
-   - Uses **Anthropic Claude Tool Calling** for deep reasoning, parameter extraction, and domain insight.
-   - Includes a robust **Local Auditor Engine** for offline/instant evaluation when no API key is provided.
+4. **LLM Auditor Chat (Claude or Gemini)**:
+   - Ask questions about the active case; answers are grounded in its predictions and SHAP drivers.
+   - Choose Anthropic Claude or Google Gemini in the sidebar and paste an API key (or set `ANTHROPIC_API_KEY` / `GEMINI_API_KEY`).
+   - Falls back to a **Local Auditor Engine** summary when no API key is provided.
 
 ---
 
@@ -29,16 +31,25 @@ disaster-type-prediction-1/
 ├── app.py                      # Streamlit Interactive Web Application
 ├── Dockerfile                  # Container definition for reproducible deployment
 ├── requirements.txt            # Python dependencies
+├── .streamlit/config.toml      # Streamlit theme & server settings
 ├── models/                     # Production artifacts
 │   ├── rf_pipeline.joblib      # Trained best Random Forest Pipeline
-│   ├── metadata.json           # 245 feature names, class mapping, and metrics
-│   └── ground_truth_bank.json  # 3,495 historical test events with ground truth
+│   ├── lgb_pipeline.joblib     # LightGBM Pipeline
+│   ├── xgb_pipeline.joblib     # XGBoost Pipeline
+│   ├── multi_model_bank.joblib # 3,495 test events with precomputed predictions from all 3 models
+│   ├── multi_model_metadata.json # Feature names, leaderboard, McNemar results
+│   ├── metadata.json           # (legacy, single-model) feature names and metrics
+│   └── ground_truth_bank.json  # (legacy, single-model) test events with ground truth
 ├── src/                        # Modular production code
-│   ├── predictor.py            # Prediction & probability computation
-│   ├── explainer.py            # SHAP TreeExplainer & feature attribution
-│   ├── benchmark.py            # Ground truth bank loader & filters
-│   ├── agent.py                # Claude Tool Calling & Local Auditor Agent
-│   └── export_model.py         # Automated pipeline training & export script
+│   ├── models/                 # Multi-model layer used by the app
+│   │   ├── registry.py         # Loads the case bank, runs multi-model audits
+│   │   ├── base.py             # Common model interface
+│   │   ├── rf_model.py / lgb_model.py / xgb_model.py  # Predict + SHAP per model
+│   │   └── utils.py            # Class names & natural-language SHAP explanations
+│   ├── agent.py                # LLM chat (Claude / Gemini) + local fallback
+│   ├── export_all_models.py    # Trains LightGBM/XGBoost, builds multi-model bank & metadata
+│   ├── export_model.py         # (legacy) Random Forest pipeline export
+│   └── predictor.py / explainer.py / benchmark.py  # (legacy, single-model; not used by app.py)
 ├── notebooks/                  # Academic research & experimental record
 │   ├── 01_data_understanding.ipynb
 │   ├── 02_data_EDA.ipynb
@@ -56,7 +67,7 @@ disaster-type-prediction-1/
 
 ### 1. Run Locally (Streamlit)
 
-Activate your Python virtual environment and run:
+Activate your Python virtual environment and run (to regenerate the LightGBM/XGBoost pipelines and the multi-model bank, first run `python -m src.export_all_models`; it needs `data/processed/disaster_processed_feature_selected.csv`):
 ```bash
 streamlit run app.py
 ```

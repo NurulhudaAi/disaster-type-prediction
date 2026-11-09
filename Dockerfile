@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY models/ ./models/
 COPY src/ ./src/
 COPY app.py .
+COPY .streamlit/config.toml ./.streamlit/config.toml
 
 # Expose Streamlit port
 EXPOSE 8501

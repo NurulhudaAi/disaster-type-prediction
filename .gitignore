@@ -8,3 +8,4 @@ __pycache__/
 *.pyc
 .agents/
 .claude/
+.streamlit/credentials.toml
